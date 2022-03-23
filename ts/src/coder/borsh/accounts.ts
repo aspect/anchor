@@ -5,7 +5,7 @@ import camelcase from "camelcase";
 import { sha256 } from "js-sha256";
 import { Idl, IdlTypeDef } from "../../idl.js";
 import { IdlCoder } from "./idl.js";
-import { AccountsCoder } from "../index.js";
+import { AccountsCoder, EnumEncoderDecoder } from "../index.js";
 import { accountSize } from "../common.js";
 
 /**
@@ -29,6 +29,8 @@ export class BorshAccountsCoder<A extends string = string>
    */
   private idl: Idl;
 
+  private enumClient:EnumEncoderDecoder;
+
   public constructor(idl: Idl) {
     if (idl.accounts === undefined) {
       this.accountLayouts = new Map();
@@ -41,6 +43,13 @@ export class BorshAccountsCoder<A extends string = string>
     this.accountLayouts = new Map(layouts);
     this.idl = idl;
   }
+
+  /**
+   * Set EnumEncoderDecoder
+   */
+   setEnumEncoderDecoder(client:EnumEncoderDecoder){
+    this.enumClient = client;
+   }
 
   public async encode<T = any>(accountName: A, account: T): Promise<Buffer> {
     const buffer = Buffer.alloc(1000); // TODO: use a tighter buffer.
@@ -60,7 +69,13 @@ export class BorshAccountsCoder<A extends string = string>
     if (discriminator.compare(data.slice(0, 8))) {
       throw new Error("Invalid account discriminator");
     }
-    return this.decodeUnchecked(accountName, data);
+    let obj = this.decodeUnchecked(accountName, data);
+
+    if(this.enumClient){
+      obj = this.enumClient.decodeAccountEnums(accountName, obj)
+    }
+
+    return obj;
   }
 
   public decodeUnchecked<T = any>(accountName: A, ix: Buffer): T {

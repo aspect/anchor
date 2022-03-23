@@ -1,8 +1,28 @@
-import { IdlEvent, IdlTypeDef } from "../idl.js";
+import { IdlEvent, IdlTypeDef } from "../idl";
 import { Event } from "../program/event.js";
 
 export * from "./borsh/index.js";
 export * from "./spl-token/index.js";
+
+export interface EnumDataObject extends Object{}
+export type EnumDataField = (string|number|symbol|EnumEncodeDecodeData)&EnumDataObject;
+export type EnumDataKeyTypes = string|number;
+export type EnumEncodeDecodeDataImpl = Record<string|number|symbol, EnumDataField>;
+export interface EnumEncodeDecodeData extends EnumEncodeDecodeDataImpl{
+};
+
+/*
+let rootData:EnumEncodeDecodeData = {field:1};
+if( typeof rootData.field === 'object' ){
+  let childData:EnumEncodeDecodeData = rootData.field;
+}
+*/
+
+export interface EnumEncoderDecoder{
+  encodeInstructionEnums(ixName: string, ix: EnumEncodeDecodeData, nameSpace?:string, methodName?:string):EnumEncodeDecodeData
+  decodeInstructionEnums(ixName: string, ix: EnumEncodeDecodeData):EnumEncodeDecodeData
+  decodeAccountEnums(accountName:string, ix: EnumEncodeDecodeData):EnumEncodeDecodeData
+}
 
 /**
  * Coder provides a facade for encoding and decoding all IDL related objects.
@@ -27,6 +47,11 @@ export interface Coder {
    * Coder for events.
    */
   readonly events: EventCoder;
+
+  /**
+   * Set EnumEncoderDecoder
+   */
+  setEnumEncoderDecoder(client:EnumEncoderDecoder):void
 }
 
 export interface StateCoder {
@@ -40,11 +65,19 @@ export interface AccountsCoder<A extends string = string> {
   decodeUnchecked<T = any>(accountName: A, ix: Buffer): T;
   memcmp(accountName: A, appendData?: Buffer): any;
   size(idlAccount: IdlTypeDef): number;
+  /**
+   * Set EnumEncoderDecoder
+   */
+   setEnumEncoderDecoder(client:EnumEncoderDecoder):void
 }
 
 export interface InstructionCoder {
   encode(ixName: string, ix: any): Buffer;
   encodeState(ixName: string, ix: any): Buffer;
+  /**
+   * Set EnumEncoderDecoder
+   */
+   setEnumEncoderDecoder(client:EnumEncoderDecoder):void
 }
 
 export interface EventCoder {

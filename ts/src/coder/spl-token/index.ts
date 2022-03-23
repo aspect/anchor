@@ -1,5 +1,5 @@
 import { Idl } from "../../idl.js";
-import { Coder } from "../index.js";
+import { Coder, EnumEncoderDecoder } from "../index.js";
 import { SplTokenInstructionCoder } from "./instruction.js";
 import { SplTokenStateCoder } from "./state.js";
 import { SplTokenAccountsCoder } from "./accounts.js";
@@ -19,5 +19,8 @@ export class SplTokenCoder implements Coder {
     this.accounts = new SplTokenAccountsCoder(idl);
     this.events = new SplTokenEventsCoder(idl);
     this.state = new SplTokenStateCoder(idl);
+  }
+  setEnumEncoderDecoder(client: EnumEncoderDecoder): void {
+      //TODO
   }
 }

@@ -1,5 +1,5 @@
+import { isBrowser } from "./utils/common";
 import NodeWallet from "./nodewallet";
-import { isBrowser } from "./utils/common.js";
 
 export { default as BN } from "bn.js";
 export * as web3 from "@solana/web3.js";

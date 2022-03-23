@@ -10,12 +10,15 @@ import {
   AccountInfo,
 } from "@solana/web3.js";
 import Provider, { getProvider } from "../../provider.js";
+// import Provider, { getProvider } from "../../provider";
+import Provider, { getProvider } from "../../provider.js";
+import { IdlTypeDef } from "../../idl";
 import { Idl, IdlAccountDef } from "../../idl.js";
 import { Coder, BorshCoder } from "../../coder/index.js";
-import { Subscription, Address, translateAddress } from "../common.js";
-import { AllAccountsMap, IdlTypes, TypeDef } from "./types.js";
-import * as pubkeyUtil from "../../utils/pubkey.js";
-import * as rpcUtil from "../../utils/rpc.js";
+import { Subscription, Address, translateAddress } from "../common";
+import { AllAccountsMap, IdlTypes, TypeDef } from "./types";
+import * as pubkeyUtil from "../../utils/pubkey";
+import * as rpcUtil from "../../utils/rpc";
 
 export default class AccountFactory {
   public static build<IDL extends Idl>(

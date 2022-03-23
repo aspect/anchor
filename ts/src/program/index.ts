@@ -1,8 +1,11 @@
 import { inflate } from "pako";
 import { PublicKey } from "@solana/web3.js";
 import Provider, { getProvider } from "../provider.js";
-import { Idl, idlAddress, decodeIdlAccount } from "../idl.js";
-import { Coder, BorshCoder } from "../coder/index.js";
+import {
+  Idl, idlAddress, decodeIdlAccount, IdlField, IdlType, IdlTypeDefined,
+  IdlTypeDef
+} from "../idl.js";
+import { Coder, BorshCoder, EnumEncoderDecoder, EnumEncodeDecodeData } from "../coder/index.js";
 import NamespaceFactory, {
   RpcNamespace,
   InstructionNamespace,
@@ -14,9 +17,11 @@ import NamespaceFactory, {
 } from "./namespace/index.js";
 import { utf8 } from "../utils/bytes/index.js";
 import { EventManager } from "./event.js";
-import { Address, translateAddress } from "./common.js";
+import { 
+  Address, translateAddress, EnumCtor, EnumFieldMaps, EnumField
+} from "./common.js";
 
-export * from "./common.js";
+export * from "./common";
 export * from "./context.js";
 export * from "./event.js";
 export * from "./namespace/index.js";
@@ -47,7 +52,7 @@ export * from "./namespace/index.js";
  * below will refer to the two counter examples found
  * [here](https://github.com/project-serum/anchor#examples).
  */
-export class Program<IDL extends Idl = Idl> {
+export class Program<IDL extends Idl = Idl> implements EnumEncoderDecoder{
   /**
    * Async methods to send signed transactions to *non*-state methods on the
    * program, returning a [[TransactionSignature]].
@@ -254,6 +259,19 @@ export class Program<IDL extends Idl = Idl> {
    */
   private _events: EventManager;
 
+  enumFields:EnumFieldMaps;
+
+  /**
+   * get Enum storage
+   */
+   public get emums(): Map<string, EnumCtor> {
+    return this._emums;
+  }
+  /**
+   * Enums storage
+   */
+  private _emums:Map<string, EnumCtor>
+
   /**
    * @param idl       The interface definition.
    * @param programId The on-chain address of the program.
@@ -278,6 +296,10 @@ export class Program<IDL extends Idl = Idl> {
     this._programId = programId;
     this._coder = coder ?? new BorshCoder(idl);
     this._events = new EventManager(this._programId, provider, this._coder);
+    this._coder.setEnumEncoderDecoder(this);
+  
+    this.enumFields = this.getEnumFields();
+    this._emums = new Map();
 
     // Dynamic namespaces.
     const [rpc, instruction, transaction, account, simulate, methods, state] =
@@ -360,5 +382,190 @@ export class Program<IDL extends Idl = Idl> {
    */
   public async removeEventListener(listener: number): Promise<void> {
     return await this._events.removeEventListener(listener);
+  }
+
+
+  /**
+   * set Enum for given name
+   *
+   * @param name name of Enum constructor
+   * @param enumC Enum constructor
+   */
+  public setEnum(name:string, enumC:EnumCtor){
+      let enumCtor = Object.assign(enumC, {
+        __value2Keys:new Map(),
+        __keys:new Map()
+      })
+      Object.keys(enumCtor).forEach(key=>{
+        if(key == "__value2Keys" || key == "__keys")
+            return
+        enumCtor.__keys.set(key.toLowerCase(), key)
+        enumCtor.__value2Keys.set(enumC[key].toString() , key.toLowerCase());
+      })
+      this._emums.set(name.toLowerCase(), enumC);
+  }
+  
+
+  public findEnumCtor(name:string):EnumCtor|undefined{
+    return this._emums.get(name)
+  }
+
+  public findEnumPoperty(inputData: EnumEncodeDecodeData, field:EnumField){
+    //console.log("field:", f)
+    let data:EnumEncodeDecodeData|null = null;
+    let index = 0, len=field.path.length, name:string="";
+    if(!len)
+      return
+    for (let Name of field.path){
+      index++;
+      name = Name.toLowerCase();
+      if(index == len){
+        data = inputData;
+      }
+      const value = inputData[name];
+      if( value === undefined)
+        break;
+      if(typeof value != "object")
+        break;
+      inputData = value;
+    }
+
+    if(!data)
+      return
+
+    let enumCtor = this.findEnumCtor(field.enumName)
+    //console.log("enumCtor:", !enumCtor?.__value2Keys, enumCtor)
+    if(!enumCtor?.__value2Keys)
+      return
+    return {enumCtor, data, name};
+  }
+
+  public encodeInstructionEnums(ixName: string, ix: EnumEncodeDecodeData){
+    let ixname = ixName.toLowerCase();
+    let fields = this.enumFields.instruction.get(ixname);
+    //console.log("ixName:", ix, "ixName:"+ixName, fields);
+    //console.log("this._emums", this._emums);
+    (fields??[]).forEach(field=>{
+      let info = this.findEnumPoperty(ix, field);
+      if(!info)
+        return
+      const {data, name, enumCtor} = info;
+      if(!enumCtor.__value2Keys)
+        return
+      //console.log("value:", name, data[name])
+      let key = enumCtor.__value2Keys.get(data[name].toString());
+      //console.log("key:", key)
+      if(key){
+        data[name] = {[key]:{}}
+      }
+    })
+    //console.log("encodeInstructionEnums:ix", ix)
+    return ix;
+  }
+
+  public decodeInstructionEnums(ixName: string, ix: EnumEncodeDecodeData){
+    return ix;
+  }
+
+  public decodeAccountEnums(accountName: string, ix: EnumEncodeDecodeData): EnumEncodeDecodeData {
+    let accountname = accountName.toLowerCase();
+    let fields = this.enumFields.accounts.get(accountname);
+    //console.log("decodeAccountEnums:", accountName, items);
+    (fields??[]).forEach(field=>{
+      let info = this.findEnumPoperty(ix, field);
+      if(!info)
+        return
+      const {data, name, enumCtor} = info;
+      if(!enumCtor.__keys)
+        return
+      //console.log("decodeAccountEnums:enumCtor:", data, name)
+      
+      let key = Object.keys(data[name]).shift();
+      //console.log("key", key)
+      if(!key)
+        return
+      
+      let value = data[name][key];
+      if(Array.isArray(value) || Object.keys(value).length){
+        //data[name] = value;
+        return
+      }
+      key = enumCtor.__keys.get(key);
+      if(key){
+        data[name] = enumCtor[key] as keyof typeof enumCtor
+      }
+    })
+    return ix;
+  }
+
+  public getEnumFields():EnumFieldMaps{
+      let {types} = this.idl
+      let result = {accounts: new Map(), instruction:new Map()};
+      let hasType = (v):v is IdlField=>{
+        return !!v?.type
+      }
+
+      let buildIdlField = (list:EnumField[], idlField:IdlField, parents:string[]=[])=>{
+        let type:{defined?:string}&IdlType = idlField.type;
+        if(!type.defined || !types)
+          return
+        let subType:IdlTypeDef&{nameLC?:string}|undefined = types.find(t=>t.name == type.defined);
+        //console.log("#### 1 : buildIdlField:subType", subType)
+        if(subType?.type.kind != "enum")
+          return
+        let name = idlField.name;
+        let enumName = subType.name.toLowerCase();
+        let path = [...parents, name];
+        list.push({path, enumName});
+        subType.type.variants.forEach(variant=>{
+          if(!variant.fields)
+            return
+          let variantPath = [...path, variant.name];
+          variant.fields.forEach((field:IdlField|IdlType)=>{
+            if(!hasType(field))
+              return
+            buildIdlField(list, field, variantPath);
+          })
+        })
+      }
+
+      let build = (list:EnumField[], idlTypeDef:IdlTypeDef)=>{
+        //if(cc.type.kind == "enum"){
+          //console.log("#### 2 :variants", cc.type.kind, cc.type.variants)
+          //cc.nameLC = cc.name.toLowerCase();
+          //list.push(cc);
+        //}else
+        if(idlTypeDef.type.kind == "struct"){
+          //console.log("#### 3 fields", cc.type.kind, cc.type.fields)
+          idlTypeDef.type.fields.forEach(a=>{
+              buildIdlField(list, a);
+          })
+        }
+      };
+
+      (this.idl.accounts ?? []).forEach(idlTypeDef=>{
+        let name = idlTypeDef.name.toLowerCase();
+        let list = result.accounts.get(name);
+        if(!list){
+            list = [];
+            result.accounts.set(name, list);
+        }
+        build(list, idlTypeDef);
+      });
+
+      (this.idl.instructions ?? []).forEach(idlIns=>{
+        let name = idlIns.name.toLowerCase();
+        let list = result.instruction.get(name);
+        if(!list){
+            list = [];
+            result.instruction.set(name, list);
+        }
+        idlIns.args.forEach(e=>{
+            buildIdlField(list, e)
+        });
+
+        //console.log("cc.name, list", cc.name, list)
+      });
+      return result;
   }
 }

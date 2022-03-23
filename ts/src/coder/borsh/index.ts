@@ -3,7 +3,7 @@ import { BorshInstructionCoder } from "./instruction.js";
 import { BorshAccountsCoder } from "./accounts.js";
 import { BorshEventCoder } from "./event.js";
 import { BorshStateCoder } from "./state.js";
-import { Coder } from "../index.js";
+import { Coder, EnumEncoderDecoder } from "../index.js";
 
 export { BorshInstructionCoder } from "./instruction.js";
 export { BorshAccountsCoder, ACCOUNT_DISCRIMINATOR_SIZE } from "./accounts.js";
@@ -42,5 +42,13 @@ export class BorshCoder<A extends string = string> implements Coder {
     if (idl.state) {
       this.state = new BorshStateCoder(idl);
     }
+  }
+
+  /**
+   * Set EnumEncoderDecoder
+   */
+  setEnumEncoderDecoder(client:EnumEncoderDecoder){
+    this.instruction.setEnumEncoderDecoder(client);
+    this.accounts.setEnumEncoderDecoder(client);
   }
 }

@@ -21,7 +21,7 @@ import {
   IdlAccounts,
 } from "../../idl.js";
 import { IdlCoder } from "./idl.js";
-import { InstructionCoder } from "../index.js";
+import { InstructionCoder, EnumEncoderDecoder } from "../index.js";
 
 /**
  * Namespace for state method function signatures.
@@ -42,6 +42,8 @@ export class BorshInstructionCoder implements InstructionCoder {
 
   // Base58 encoded sighash to instruction layout.
   private sighashLayouts: Map<string, { layout: Layout; name: string }>;
+
+  private enumClient:EnumEncoderDecoder;
 
   public constructor(private idl: Idl) {
     this.ixLayout = BorshInstructionCoder.parseIxLayout(idl);
@@ -75,6 +77,11 @@ export class BorshInstructionCoder implements InstructionCoder {
     return this._encode(SIGHASH_GLOBAL_NAMESPACE, ixName, ix);
   }
 
+
+  setEnumEncoderDecoder(client:EnumEncoderDecoder){
+    this.enumClient  = client;
+  }
+
   /**
    * Encodes a program state instruction.
    */
@@ -89,6 +96,9 @@ export class BorshInstructionCoder implements InstructionCoder {
     if (!layout) {
       throw new Error(`Unknown method: ${methodName}`);
     }
+    if(this.enumClient){
+      ix = this.enumClient.encodeInstructionEnums(ixName, ix, nameSpace, methodName);
+    }
     const len = layout.encode(ix, buffer);
     const data = buffer.slice(0, len);
     return Buffer.concat([sighash(nameSpace, ixName), data]);
@@ -100,6 +110,7 @@ export class BorshInstructionCoder implements InstructionCoder {
     const ixLayouts = stateMethods
       .map((m: IdlStateMethod): [string, Layout<unknown>] => {
         let fieldLayouts = m.args.map((arg: IdlField) => {
+          //console.log("stateMethods:arg::::", arg)
           return IdlCoder.fieldLayout(
             arg,
             Array.from([...(idl.accounts ?? []), ...(idl.types ?? [])])
@@ -110,16 +121,18 @@ export class BorshInstructionCoder implements InstructionCoder {
       })
       .concat(
         idl.instructions.map((ix) => {
-          let fieldLayouts = ix.args.map((arg: IdlField) =>
-            IdlCoder.fieldLayout(
+          let fieldLayouts = ix.args.map((arg: IdlField) =>{
+            //console.log("instructions:arg::::", arg)
+            return IdlCoder.fieldLayout(
               arg,
               Array.from([...(idl.accounts ?? []), ...(idl.types ?? [])])
             )
-          );
+          });
           const name = camelCase(ix.name);
           return [name, borsh.struct(fieldLayouts, name)];
         })
       );
+    //console.log("ixLayouts:", ixLayouts)
     return new Map(ixLayouts);
   }
 
@@ -134,13 +147,20 @@ export class BorshInstructionCoder implements InstructionCoder {
       ix = encoding === "hex" ? Buffer.from(ix, "hex") : bs58.decode(ix);
     }
     let sighash = bs58.encode(ix.slice(0, 8));
-    let data = ix.slice(8);
+    
+    let dataBuffer = ix.slice(8);
     const decoder = this.sighashLayouts.get(sighash);
+    //console.log("decode:sighash", sighash, decoder)
     if (!decoder) {
       return null;
     }
+    let data = decoder.layout.decode(dataBuffer);
+    //console.log("decode:data", data)
+    if(this.enumClient){
+      data = this.enumClient.decodeInstructionEnums(decoder.name, data);
+    }
     return {
-      data: decoder.layout.decode(data),
+      data,
       name: decoder.name,
     };
   }

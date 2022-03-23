@@ -1,7 +1,7 @@
 import * as BufferLayout from "buffer-layout";
 import camelCase from "camelcase";
 import { PublicKey } from "@solana/web3.js";
-import { InstructionCoder } from "../index.js";
+import { EnumEncoderDecoder, InstructionCoder } from "../index.js";
 import { Idl } from "../../idl.js";
 
 export class SplTokenInstructionCoder implements InstructionCoder {
@@ -80,6 +80,9 @@ export class SplTokenInstructionCoder implements InstructionCoder {
 
   encodeState(_ixName: string, _ix: any): Buffer {
     throw new Error("SPL token does not have state");
+  }
+  setEnumEncoderDecoder(client: EnumEncoderDecoder): void {
+      //TODO
   }
 }
 

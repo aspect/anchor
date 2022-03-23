@@ -1,12 +1,25 @@
 import EventEmitter from "eventemitter3";
 import { PublicKey } from "@solana/web3.js";
-import { Idl, IdlInstruction, IdlAccountItem, IdlStateMethod } from "../idl.js";
+import { Idl, IdlInstruction, IdlAccountItem, IdlStateMethod, IdlTypeDefTyEnum } from "../idl.js";
 import { Accounts } from "./context.js";
 
 export type Subscription = {
   listener: number;
   ee: EventEmitter;
 };
+
+export type EnumCtor = Record<string, string|number> & {
+  __value2Keys?:Map<string, string>,
+  __keys?:Map<string, string>
+}
+export interface EnumField {
+  path:string[],
+  enumName:string
+}
+export interface EnumFieldMaps{
+  accounts:Map<string, EnumField[]>,
+  instruction:Map<string, EnumField[]>
+}
 
 export function parseIdlErrors(idl: Idl): Map<number, string> {
   const errors = new Map();

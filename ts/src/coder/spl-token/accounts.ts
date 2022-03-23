@@ -1,6 +1,6 @@
 import * as BufferLayout from "buffer-layout";
 import { publicKey, uint64, coption, bool } from "./buffer-layout.js";
-import { AccountsCoder } from "../index.js";
+import { AccountsCoder, EnumEncoderDecoder } from "../index.js";
 import { Idl, IdlTypeDef } from "../../idl.js";
 import { accountSize } from "../common";
 
@@ -66,6 +66,9 @@ export class SplTokenAccountsCoder<A extends string = string>
 
   public size(idlAccount: IdlTypeDef): number {
     return accountSize(this.idl, idlAccount) ?? 0;
+  }
+  setEnumEncoderDecoder(client: EnumEncoderDecoder): void {
+    //TODO
   }
 }
 
